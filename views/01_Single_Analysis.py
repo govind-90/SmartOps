@@ -2,6 +2,7 @@
 
 import streamlit as st
 from datetime import datetime
+from types import SimpleNamespace
 import json
 from pathlib import Path
 import sys
@@ -203,6 +204,131 @@ def render_analysis_details(llm_assessment, compliance_result, risk_scoring):
         st.json(risk_scoring.scoring_breakdown, expanded=False)
 
 
+def display_results_from_session():
+    """Render analysis UI from session state values if available."""
+    # Require either the serial summaries or the full objects
+    if not (st.session_state.get("llm_assessment_serial") or st.session_state.get("llm_assessment")):
+        return
+
+    # Prefer lightweight serials (more robust across reruns); fall back to objects
+    llm_serial = st.session_state.get("llm_assessment_serial") or None
+    comp_serial = st.session_state.get("compliance_result_serial") or None
+    rs_serial = st.session_state.get("risk_scoring_serial") or None
+    final_decision_val = st.session_state.get("final_decision_serial") or (getattr(st.session_state.get("final_decision"), "value", None))
+    reasoning = st.session_state.get("reasoning")
+
+    # Create SimpleNamespace objects to reuse existing render helpers
+    llm_assessment = SimpleNamespace(**(llm_serial or {}))
+    compliance_result = SimpleNamespace(**(comp_serial or {}))
+    risk_scoring = SimpleNamespace(**(rs_serial or {}))
+    # Ensure risk_level attribute exists as object with .value for render_metrics compatibility
+    if hasattr(risk_scoring, "risk_level") and isinstance(risk_scoring.risk_level, str):
+        risk_scoring.risk_level = SimpleNamespace(value=risk_scoring.risk_level)
+    if not hasattr(risk_scoring, "risk_level") or not getattr(risk_scoring, "risk_level"):
+        risk_scoring.risk_level = SimpleNamespace(value="UNKNOWN")
+    final_decision = SimpleNamespace(value=final_decision_val)
+
+    # Decision banner
+    render_decision_banner(
+        final_decision.value,
+        risk_scoring.final_risk_score,
+        llm_assessment.confidence
+    )
+
+    # Metrics
+    render_metrics(llm_assessment, compliance_result, risk_scoring)
+
+    st.markdown(f"### 📝 Reasoning\n{reasoning}")
+
+    # Detailed analysis
+    render_analysis_details(llm_assessment, compliance_result, risk_scoring)
+
+    # Save / Export actions
+    col1, col2, col3 = st.columns([2, 1, 1])
+
+    with col1:
+        if st.button("💾 Save Analysis to Database", use_container_width=True, key="save_analysis"):
+            try:
+                lr = st.session_state.get("last_change_request")
+                llm_assess = st.session_state.get("llm_assessment_serial") or st.session_state.get("llm_assessment")
+                comp_res = st.session_state.get("compliance_result_serial") or st.session_state.get("compliance_result")
+                rs = st.session_state.get("risk_scoring_serial") or st.session_state.get("risk_scoring")
+                final_dec = st.session_state.get("final_decision_serial") or (getattr(st.session_state.get("final_decision"), "value", None))
+                reasoning_text = st.session_state.get("reasoning")
+
+                if not lr or not llm_assess:
+                    st.error("No analysis in session to save. Please run analysis first.")
+                else:
+                    # Defensive reads: lr may be object or dict
+                    analysis_id = AnalysisRepository.save_analysis(
+                        short_description=getattr(lr, "short_description", None) or (lr.get("short_description") if isinstance(lr, dict) else None),
+                        long_description=getattr(lr, "long_description", None) or (lr.get("long_description") if isinstance(lr, dict) else None),
+                        change_type=(getattr(lr, "change_type", None).value if getattr(lr, "change_type", None) else (lr.get("change_type") if isinstance(lr, dict) else None)),
+                        change_category=(getattr(lr, "change_category", None).value if getattr(lr, "change_category", None) else (lr.get("change_category") if isinstance(lr, dict) else None)),
+                        implementation_steps=getattr(lr, "implementation_steps", None) or (lr.get("implementation_steps") if isinstance(lr, dict) else None),
+                        validation_steps=getattr(lr, "validation_steps", None) or (lr.get("validation_steps") if isinstance(lr, dict) else None),
+                        rollback_plan=getattr(lr, "rollback_plan", None) or (lr.get("rollback_plan") if isinstance(lr, dict) else None),
+                        planned_window=getattr(lr, "planned_window", None) or (lr.get("planned_window") if isinstance(lr, dict) else None),
+                        impacted_services=getattr(lr, "impacted_services", None) or (lr.get("impacted_services") if isinstance(lr, dict) else None),
+                        complexity=(getattr(lr, "complexity", None).value if getattr(lr, "complexity", None) else (lr.get("complexity") if isinstance(lr, dict) else None)),
+                        final_decision=final_dec,
+                        risk_score=(rs.get("final_risk_score") if isinstance(rs, dict) else getattr(rs, "final_risk_score", None)),
+                        confidence=(llm_assess.get("confidence") if isinstance(llm_assess, dict) else getattr(llm_assess, "confidence", None)),
+                        reasoning=reasoning_text,
+                        risk_factors=(llm_assess.get("risk_factors") if isinstance(llm_assess, dict) else getattr(llm_assess, "risk_factors", [])),
+                        red_flags=(llm_assess.get("red_flags") if isinstance(llm_assess, dict) else getattr(llm_assess, "red_flags", [])),
+                        recommendations=(llm_assess.get("recommendations") if isinstance(llm_assess, dict) else getattr(llm_assess, "recommendations", [])),
+                        compliance_compliant=(comp_res.get("compliant") if isinstance(comp_res, dict) else getattr(comp_res, "compliant", None)),
+                        compliance_score=(comp_res.get("compliance_score") if isinstance(comp_res, dict) else getattr(comp_res, "compliance_score", None)),
+                        compliance_issues=(comp_res.get("violations") if isinstance(comp_res, dict) else [v.dict() for v in getattr(comp_res, "violations", [])]),
+                    )
+                    st.success(f"✅ Analysis saved! ID: {analysis_id}")
+                    page_logger.info(f"Analysis saved with ID: {analysis_id}")
+                    st.session_state.last_saved_id = analysis_id
+            except Exception as e:
+                st.error(f"Failed to save: {str(e)}")
+                page_logger.error(f"Failed to save analysis: {e}")
+
+    with col2:
+        if st.button("📋 Copy JSON", use_container_width=True, key="copy_json"):
+            lr = st.session_state.get("last_change_request")
+            short = getattr(lr, "short_description", None) or (lr.get("short_description") if isinstance(lr, dict) else "")
+            long = getattr(lr, "long_description", None) or (lr.get("long_description") if isinstance(lr, dict) else "")
+            final = st.session_state.get("final_decision_serial") or (getattr(st.session_state.get("final_decision"), "value", None))
+            risk = (st.session_state.get("risk_scoring_serial", {}).get("final_risk_score") if st.session_state.get("risk_scoring_serial") else (getattr(st.session_state.get("risk_scoring"), "final_risk_score", None)))
+            st.code(json.dumps({
+                "short_description": short,
+                "long_description": long,
+                "final_decision": final,
+                "risk_score": risk,
+            }, ensure_ascii=False, indent=2))
+
+    with col3:
+        lr = st.session_state.get("last_change_request")
+        short = getattr(lr, "short_description", None) or (lr.get("short_description") if isinstance(lr, dict) else "")
+        long = getattr(lr, "long_description", None) or (lr.get("long_description") if isinstance(lr, dict) else "")
+        final = st.session_state.get("final_decision_serial") or (getattr(st.session_state.get("final_decision"), "value", None))
+        risk = (st.session_state.get("risk_scoring_serial", {}).get("final_risk_score") if st.session_state.get("risk_scoring_serial") else (getattr(st.session_state.get("risk_scoring"), "final_risk_score", None)))
+        reasoning_text = st.session_state.get("reasoning")
+
+        # Removed JSON download button per user request. Keep New Analysis action.
+        if st.button("🔁 New Analysis", use_container_width=True, key="new_analysis"):
+            # Clear analysis-related session state and form fields, then rerun
+            keys_to_clear = [
+                "llm_assessment", "compliance_result", "risk_scoring", "final_decision", "reasoning",
+                "last_change_request", "last_saved_id", "llm_assessment_serial", "compliance_result_serial",
+                "risk_scoring_serial", "final_decision_serial",
+                # Form field keys
+                "sa_short_desc", "sa_change_type", "sa_change_category", "sa_complexity",
+                "sa_long_desc", "sa_planned_window", "sa_impacted_services",
+                "sa_impl_steps", "sa_rollback_plan", "sa_validation_steps",
+            ]
+            for k in keys_to_clear:
+                if k in st.session_state:
+                    del st.session_state[k]
+            st.experimental_rerun()
+
+
 # Main form
 with st.form("change_analysis_form"):
     st.markdown("### Change Request Details")
@@ -214,45 +340,52 @@ with st.form("change_analysis_form"):
             "Short Description *",
             help="Brief summary (10-200 characters)",
             max_chars=200,
-            placeholder="Update API rate limiting to 500 req/sec"
+            placeholder="Update API rate limiting to 500 req/sec",
+            key="sa_short_desc",
         )
         
         change_type = st.selectbox(
             "Change Type *",
             [t.value for t in ChangeType],
-            help="Type of change: standard, normal, or emergency"
+            help="Type of change: standard, normal, or emergency",
+            key="sa_change_type",
         )
         
         change_category = st.selectbox(
             "Change Category *",
             [c.value for c in ChangeCategory],
-            help="What area does this change affect?"
+            help="What area does this change affect?",
+            key="sa_change_category",
         )
         
         complexity = st.selectbox(
             "Complexity *",
             [c.value for c in Complexity],
-            help="Technical complexity level"
+            help="Technical complexity level",
+            key="sa_complexity",
         )
     
     with col2:
         long_desc = st.text_area(
             "Long Description *",
             help="Detailed explanation of the change",
-            placeholder="Detailed description of why, what, and how..."
+            placeholder="Detailed description of why, what, and how...",
+            key="sa_long_desc",
         )
         
         planned_window = st.text_input(
             "Planned Window (ISO datetime) *",
             help="Format: 2024-02-20T22:00:00Z",
-            placeholder="2024-02-20T22:00:00Z"
+            placeholder="2024-02-20T22:00:00Z",
+            key="sa_planned_window",
         )
         
         impacted_services = st.text_area(
             "Impacted Services *",
             help="Comma-separated list of affected services",
             height=80,
-            placeholder="API Gateway, Authentication Service, Database"
+            placeholder="API Gateway, Authentication Service, Database",
+            key="sa_impacted_services",
         )
     
     st.markdown("### Implementation & Validation")
@@ -264,14 +397,16 @@ with st.form("change_analysis_form"):
             "Implementation Steps *",
             help="Step-by-step instructions",
             height=150,
-            placeholder="1. SSH to server\n2. Update config file\n3. Restart service"
+            placeholder="1. SSH to server\n2. Update config file\n3. Restart service",
+            key="sa_impl_steps",
         )
         
         rollback_plan = st.text_area(
             "Rollback Plan *",
             help="How to revert if issues occur",
             height=150,
-            placeholder="1. Restore previous config\n2. Restart service"
+            placeholder="1. Restore previous config\n2. Restart service",
+            key="sa_rollback_plan",
         )
     
     with col2:
@@ -279,7 +414,8 @@ with st.form("change_analysis_form"):
             "Validation Steps *",
             help="How to verify the change worked",
             height=150,
-            placeholder="1. Test endpoint works\n2. Monitor error rate\n3. Verify latency"
+            placeholder="1. Test endpoint works\n2. Monitor error rate\n3. Verify latency",
+            key="sa_validation_steps",
         )
     
     # Submit button
@@ -343,87 +479,51 @@ if submit:
                 llm_assessment, compliance_result, risk_scoring, final_decision, reasoning = orchestrator.analyze_change(change_request)
                 progress_placeholder.empty()
                 
-                # Display results
-                st.success("✅ Analysis Complete!")
-                
-                # Decision banner
-                render_decision_banner(
-                    final_decision.value,
-                    risk_scoring.final_risk_score,
-                    llm_assessment.confidence
-                )
-                
-                # Metrics
-                render_metrics(llm_assessment, compliance_result, risk_scoring)
-                
-                st.markdown(f"### 📝 Reasoning\n{reasoning}")
-                
-                # Detailed analysis
-                render_analysis_details(llm_assessment, compliance_result, risk_scoring)
-                
-                # Save to database
-                col1, col2, col3 = st.columns([2, 1, 1])
-                
-                with col1:
-                    if st.button("💾 Save Analysis to Database", use_container_width=True):
-                        try:
-                            analysis_id = AnalysisRepository.save_analysis(
-                                short_description=change_request.short_description,
-                                long_description=change_request.long_description,
-                                change_type=change_request.change_type.value,
-                                change_category=change_request.change_category.value,
-                                implementation_steps=change_request.implementation_steps,
-                                validation_steps=change_request.validation_steps,
-                                rollback_plan=change_request.rollback_plan,
-                                planned_window=change_request.planned_window,
-                                impacted_services=change_request.impacted_services,
-                                complexity=change_request.complexity.value,
-                                final_decision=final_decision.value,
-                                risk_score=risk_scoring.final_risk_score,
-                                confidence=llm_assessment.confidence,
-                                reasoning=reasoning,
-                                risk_factors=llm_assessment.risk_factors,
-                                red_flags=llm_assessment.red_flags,
-                                recommendations=llm_assessment.recommendations,
-                                compliance_compliant=compliance_result.compliant,
-                                compliance_score=compliance_result.compliance_score,
-                                compliance_issues=[v.dict() for v in compliance_result.violations],
-                            )
-                            st.success(f"✅ Analysis saved! ID: {analysis_id}")
-                            page_logger.info(f"Analysis saved with ID: {analysis_id}")
-                        except Exception as e:
-                            st.error(f"Failed to save: {str(e)}")
-                            page_logger.error(f"Failed to save analysis: {e}")
-                
-                with col2:
-                    if st.button("📋 Copy JSON", use_container_width=True):
-                        st.code(json.dumps({
-                            "short_description": change_request.short_description,
-                            "long_description": change_request.long_description,
-                            "final_decision": final_decision.value,
-                            "risk_score": risk_scoring.final_risk_score,
-                        }, ensure_ascii=False, indent=2))
-                
-                with col3:
-                    # Download JSON of the result
-                    result_json = json.dumps({
-                        "short_description": change_request.short_description,
-                        "long_description": change_request.long_description,
-                        "final_decision": final_decision.value,
-                        "risk_score": risk_scoring.final_risk_score,
-                        "reasoning": reasoning,
-                    }, ensure_ascii=False, indent=2)
+                # Persist results in session state so they survive reruns
+                st.session_state.llm_assessment = llm_assessment
+                st.session_state.compliance_result = compliance_result
+                st.session_state.risk_scoring = risk_scoring
+                st.session_state.final_decision = final_decision
+                st.session_state.reasoning = reasoning
+                st.session_state.last_change_request = change_request
 
-                    st.download_button(
-                        "📥 Download JSON",
-                        data=result_json,
-                        file_name="analysis_result.json",
-                        mime="application/json",
-                        use_container_width=True,
-                    )
+                # Also store lightweight, serializable summaries so UI survives
+                # reruns triggered by interactive widgets (download/copy/save).
+                st.session_state.llm_assessment_serial = {
+                    "confidence": getattr(llm_assessment, "confidence", None),
+                    "risk_score": getattr(llm_assessment, "risk_score", None),
+                    "risk_factors": list(getattr(llm_assessment, "risk_factors", []) or []),
+                    "red_flags": list(getattr(llm_assessment, "red_flags", []) or []),
+                    "recommendations": list(getattr(llm_assessment, "recommendations", []) or []),
+                    "validation_suggestions": list(getattr(llm_assessment, "validation_suggestions", []) or []),
+                    "critical_concerns": list(getattr(llm_assessment, "critical_concerns", []) or []),
+                    "positive_aspects": list(getattr(llm_assessment, "positive_aspects", []) or []),
+                    "missing_information": list(getattr(llm_assessment, "missing_information", []) or []),
+                }
 
-                    if st.button("🔁 New Analysis", use_container_width=True):
-                        st.experimental_rerun()
+                st.session_state.compliance_result_serial = {
+                    "compliant": getattr(compliance_result, "compliant", None),
+                    "compliance_score": getattr(compliance_result, "compliance_score", None),
+                    "violations": [v.dict() if hasattr(v, "dict") else v for v in getattr(compliance_result, "violations", []) or []],
+                    "compliant_aspects": list(getattr(compliance_result, "compliant_aspects", []) or []),
+                }
+
+                st.session_state.risk_scoring_serial = {
+                    "final_risk_score": getattr(risk_scoring, "final_risk_score", None),
+                    "risk_level": getattr(risk_scoring, "risk_level", None).value if getattr(risk_scoring, "risk_level", None) else None,
+                    "scoring_breakdown": getattr(risk_scoring, "scoring_breakdown", {}) or {},
+                }
+
+                st.session_state.final_decision_serial = getattr(final_decision, "value", str(final_decision))
+
+                # Results are persisted to session state. They will be
+                # rendered outside the form to avoid using `st.button` inside forms.
+                pass
             except Exception as e:
                 page_logger.error(f"Analysis failed: {e}")
                 st.error(f"❌ Analysis failed: {e}")
+
+
+# Render persisted results outside of the form so interactive buttons are allowed
+if st.session_state.get("llm_assessment"):
+    display_results_from_session()

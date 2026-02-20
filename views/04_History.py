@@ -23,6 +23,135 @@ st.set_page_config(
 
 st.title("🔍 Analysis History & Search")
 
+
+def render_search_results_from_session():
+    """Render stored search results from session state (persists across reruns)."""
+    if not st.session_state.get("search_results"):
+        return
+
+    analyses = st.session_state.search_results
+    results_df = st.session_state.search_results_df
+    csv = st.session_state.search_results_csv
+    total_count = st.session_state.search_total_count
+
+    st.markdown("---")
+    st.markdown(f"### 📊 Results ({len(analyses)} of {total_count} total)")
+
+    # Recreate styled dataframe for display
+    def color_decision(val):
+        if val == "APPROVE":
+            return "background-color: #d4edda"
+        elif val == "REVIEW_REQUIRED":
+            return "background-color: #fff3cd"
+        else:
+            return "background-color: #f8d7da"
+
+    styled_df = results_df.style.applymap(
+        color_decision,
+        subset=["Decision"]
+    )
+
+    st.dataframe(styled_df, use_container_width=True)
+
+    # Export using stored CSV
+    st.download_button(
+        "📥 Download Search Results CSV",
+        csv,
+        f"search_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        "text/csv",
+        use_container_width=True,
+    )
+
+    # View details
+    st.markdown("---")
+    st.markdown("### 📄 View Details")
+
+    results_data = [
+        {
+            "ID": a["id"],
+            "Description": a["short_description"][:60] + "...",
+            "Decision": a["final_decision"],
+            "Risk": a["risk_score"],
+            "Date": a["created_at"].strftime("%Y-%m-%d %H:%M") if hasattr(a["created_at"], "strftime") else a["created_at"],
+        }
+        for a in analyses
+    ]
+
+    selected_id = st.selectbox(
+        "Select an analysis to view details",
+        options=[r["ID"] for r in results_data],
+        format_func=lambda x: f"ID {x} - {[r for r in results_data if r['ID'] == x][0]['Description']}",
+    )
+
+    if selected_id:
+        try:
+            analysis = AnalysisRepository.get_analysis(selected_id)
+            if analysis:
+                # Display details
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    st.metric("Decision", analysis["final_decision"])
+                with col2:
+                    st.metric("Risk Score", analysis["risk_score"])
+                with col3:
+                    st.metric("Confidence", f"{analysis['confidence']}%")
+                with col4:
+                    st.metric("Compliant", "✅" if analysis["compliance_compliant"] else "❌")
+
+                st.markdown("---")
+
+                # Tabs for different sections
+                tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                    "Change Request",
+                    "Assessment",
+                    "Risk Factors",
+                    "Recommendations",
+                    "Compliance"
+                ])
+
+                with tab1:
+                    st.markdown("#### Change Request Details")
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.write(f"**Category**: {analysis['change_category']}")
+                        st.write(f"**Type**: {analysis['change_type']}")
+                        st.write(f"**Complexity**: {analysis['complexity']}")
+                        st.write(f"**Services**: {analysis['impacted_services']}")
+
+                    with col2:
+                        st.write(f"**Window**: {analysis['planned_window']}")
+                        st.write(f"**Created**: {analysis['created_at']}")
+
+                with tab2:
+                    st.markdown("#### Analysis Reasoning")
+                    st.info(analysis["reasoning"])
+
+                with tab3:
+                    st.markdown("#### Risk Factors")
+                    for i, factor in enumerate(analysis["risk_factors"], 1):
+                        st.write(f"{i}. {factor}")
+
+                with tab4:
+                    st.markdown("#### Recommendations")
+                    for i, rec in enumerate(analysis["recommendations"], 1):
+                        st.write(f"{i}. {rec}")
+
+                with tab5:
+                    st.markdown("#### Compliance Assessment")
+                    st.write(f"**Compliant**: {'✅ Yes' if analysis['compliance_compliant'] else '❌ No'}")
+                    st.write(f"**Compliance Score**: {analysis['compliance_score']}/100")
+
+                    if analysis["compliance_issues"]:
+                        st.markdown("**Violations**:")
+                        for issue in analysis["compliance_issues"]:
+                            st.warning(f"- {issue.get('issue', 'Unknown issue')}")
+
+        except Exception as e:
+            st.error(f"Failed to load analysis details: {e}")
+            page_logger.error(f"Failed to load analysis {selected_id}: {e}")
+
 # Search/filter section
 st.markdown("### 🔎 Search Filters")
 
@@ -123,9 +252,17 @@ if st.button("🔍 Search", use_container_width=True, type="primary"):
             
             # Export
             csv = results_df.to_csv(index=False)
+
+            # Persist search results to session state so they survive reruns
+            st.session_state.search_results = analyses
+            st.session_state.search_results_df = results_df
+            st.session_state.search_results_csv = csv
+            st.session_state.search_total_count = total_count
+
+            # Provide download button (reads from the CSV stored in session)
             st.download_button(
                 "📥 Download Search Results CSV",
-                csv,
+                st.session_state.search_results_csv,
                 f"search_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 "text/csv",
                 use_container_width=True,
@@ -216,6 +353,10 @@ if st.button("🔍 Search", use_container_width=True, type="primary"):
     except Exception as e:
         st.error(f"Search failed: {str(e)}")
         page_logger.error(f"Search error: {e}")
+
+# If there are stored search results from a previous run, re-render them so
+# download/selection doesn't cause the UI to disappear on reruns.
+render_search_results_from_session()
 
 # Quick stats
 st.markdown("---")
