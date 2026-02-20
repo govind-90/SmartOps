@@ -47,13 +47,11 @@ class ChangeRequest(BaseModel):
 
     short_description: str = Field(
         ...,
-        min_length=10,
         max_length=200,
-        description="Brief summary of the change (10-200 characters)"
+        description="Brief summary of the change"
     )
     long_description: str = Field(
         ...,
-        min_length=20,
         description="Detailed description of the change"
     )
     change_type: ChangeType = Field(
@@ -66,17 +64,14 @@ class ChangeRequest(BaseModel):
     )
     implementation_steps: str = Field(
         ...,
-        min_length=10,
         description="Step-by-step implementation instructions"
     )
     validation_steps: str = Field(
         ...,
-        min_length=10,
         description="How will the change be validated/tested"
     )
     rollback_plan: str = Field(
         ...,
-        min_length=10,
         description="Procedure to rollback if issues occur"
     )
     planned_window: str = Field(

@@ -68,14 +68,14 @@ def initialize_engines():
 
 def render_decision_banner(decision, risk_score, confidence):
     """Render decision banner with color coding."""
-    
+
     # Color mapping
     color_map = {
         "APPROVE": "#28a745",
         "REVIEW_REQUIRED": "#ffc107",
         "REJECT": "#dc3545",
     }
-    
+
     color = color_map.get(decision, "#6c757d")
     emoji_map = {
         "APPROVE": "✅",
@@ -83,7 +83,7 @@ def render_decision_banner(decision, risk_score, confidence):
         "REJECT": "❌",
     }
     emoji = emoji_map.get(decision, "ℹ️")
-    
+
     st.markdown(f"""
     <div style="
         background-color: {color}20;
@@ -96,7 +96,7 @@ def render_decision_banner(decision, risk_score, confidence):
             {emoji} {decision.replace('_', ' ')}
         </h2>
         <p style="margin: 0.5rem 0 0 0;">
-            Risk Score: <strong>{risk_score}/100</strong> | 
+            Risk Score: <strong>{risk_score}/100</strong> |
             Confidence: <strong>{confidence}%</strong>
         </p>
     </div>
@@ -105,38 +105,38 @@ def render_decision_banner(decision, risk_score, confidence):
 
 def render_metrics(risk_assessment, compliance_result, risk_scoring):
     """Render analysis metrics."""
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         st.metric("Risk Score", f"{risk_scoring.final_risk_score}/100",
                  delta=f"{risk_assessment.risk_score - risk_scoring.final_risk_score:+d} (LLM)")
-    
+
     with col2:
         st.metric("Confidence", f"{risk_assessment.confidence}%")
-    
+
     with col3:
         st.metric("Compliance Score", f"{compliance_result.compliance_score}%",
                  delta="✅ Compliant" if compliance_result.compliant else "⚠️ Issues")
-    
+
     with col4:
         st.metric("Risk Level", risk_scoring.risk_level.value)
 
 
 def render_analysis_details(llm_assessment, compliance_result, risk_scoring):
     """Render detailed analysis information."""
-    
+
     st.markdown("### 📊 Analysis Details")
-    
+
     # Tabs for different sections
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Risk Factors", 
+        "Risk Factors",
         "Compliance",
         "Recommendations",
         "Validation",
         "Scoring Breakdown"
     ])
-    
+
     with tab1:
         st.markdown("#### Risk Factors Identified")
         if llm_assessment.risk_factors:
@@ -144,16 +144,16 @@ def render_analysis_details(llm_assessment, compliance_result, risk_scoring):
                 st.write(f"{i}. {factor}")
         else:
             st.info("No significant risk factors identified")
-        
+
         if llm_assessment.red_flags:
             st.markdown("#### 🚨 Red Flags")
             for flag in llm_assessment.red_flags:
                 st.warning(f"⚠️ {flag}")
-    
+
     with tab2:
         st.markdown(f"**Compliance Status**: {'✅ Compliant' if compliance_result.compliant else '❌ Non-Compliant'}")
         st.markdown(f"**Compliance Score**: {compliance_result.compliance_score}/100")
-        
+
         if compliance_result.violations:
             st.markdown("#### 🚫 Policy Violations")
             for violation in compliance_result.violations:
@@ -165,12 +165,12 @@ def render_analysis_details(llm_assessment, compliance_result, risk_scoring):
                     st.markdown(f"**How to Fix**: {violation.remediation}")
         else:
             st.success("✅ No policy violations detected")
-        
+
         if compliance_result.compliant_aspects:
             st.markdown("#### ✅ Compliant Aspects")
             for aspect in compliance_result.compliant_aspects:
                 st.success(f"✓ {aspect}")
-    
+
     with tab3:
         st.markdown("#### Recommendations for Improvement")
         if llm_assessment.recommendations:
@@ -178,28 +178,28 @@ def render_analysis_details(llm_assessment, compliance_result, risk_scoring):
                 st.write(f"{i}. {rec}")
         else:
             st.info("No specific recommendations needed")
-        
+
         if llm_assessment.validation_suggestions:
             st.markdown("#### Validation Suggestions")
             for i, validation in enumerate(llm_assessment.validation_suggestions, 1):
                 st.write(f"{i}. {validation}")
-    
+
     with tab4:
         if llm_assessment.critical_concerns:
             st.markdown("#### ⚠️ Critical Concerns")
             for concern in llm_assessment.critical_concerns:
                 st.error(f"🚨 {concern}")
-        
+
         if llm_assessment.positive_aspects:
             st.markdown("#### ✅ Positive Aspects")
             for aspect in llm_assessment.positive_aspects:
                 st.success(f"✓ {aspect}")
-        
+
         if llm_assessment.missing_information:
             st.markdown("#### ⓘ Missing Information")
             for item in llm_assessment.missing_information:
                 st.info(f"ℹ️ {item}")
-    
+
     with tab5:
         st.json(risk_scoring.scoring_breakdown, expanded=False)
 
@@ -304,26 +304,10 @@ def display_results_from_session():
             }, ensure_ascii=False, indent=2))
 
     with col3:
-        lr = st.session_state.get("last_change_request")
-        short = getattr(lr, "short_description", None) or (lr.get("short_description") if isinstance(lr, dict) else "")
-        long = getattr(lr, "long_description", None) or (lr.get("long_description") if isinstance(lr, dict) else "")
-        final = st.session_state.get("final_decision_serial") or (getattr(st.session_state.get("final_decision"), "value", None))
-        risk = (st.session_state.get("risk_scoring_serial", {}).get("final_risk_score") if st.session_state.get("risk_scoring_serial") else (getattr(st.session_state.get("risk_scoring"), "final_risk_score", None)))
-        reasoning_text = st.session_state.get("reasoning")
-
         # Removed JSON download button per user request. Keep New Analysis action.
         if st.button("🔁 New Analysis", use_container_width=True, key="new_analysis"):
-            # Clear analysis-related session state and form fields, then rerun
-            keys_to_clear = [
-                "llm_assessment", "compliance_result", "risk_scoring", "final_decision", "reasoning",
-                "last_change_request", "last_saved_id", "llm_assessment_serial", "compliance_result_serial",
-                "risk_scoring_serial", "final_decision_serial",
-                # Form field keys
-                "sa_short_desc", "sa_change_type", "sa_change_category", "sa_complexity",
-                "sa_long_desc", "sa_planned_window", "sa_impacted_services",
-                "sa_impl_steps", "sa_rollback_plan", "sa_validation_steps",
-            ]
-            for k in keys_to_clear:
+            # Clear analysis-related session state and rerun
+            for k in ["llm_assessment", "compliance_result", "risk_scoring", "final_decision", "reasoning", "last_change_request", "last_saved_id", "llm_assessment_serial", "compliance_result_serial", "risk_scoring_serial", "final_decision_serial"]:
                 if k in st.session_state:
                     del st.session_state[k]
             st.experimental_rerun()
@@ -332,92 +316,82 @@ def display_results_from_session():
 # Main form
 with st.form("change_analysis_form"):
     st.markdown("### Change Request Details")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         short_desc = st.text_input(
             "Short Description *",
             help="Brief summary (10-200 characters)",
             max_chars=200,
-            placeholder="Update API rate limiting to 500 req/sec",
-            key="sa_short_desc",
+            placeholder="Update API rate limiting to 500 req/sec"
         )
-        
+
         change_type = st.selectbox(
             "Change Type *",
             [t.value for t in ChangeType],
-            help="Type of change: standard, normal, or emergency",
-            key="sa_change_type",
+            help="Type of change: standard, normal, or emergency"
         )
-        
+
         change_category = st.selectbox(
             "Change Category *",
             [c.value for c in ChangeCategory],
-            help="What area does this change affect?",
-            key="sa_change_category",
+            help="What area does this change affect?"
         )
-        
+
         complexity = st.selectbox(
             "Complexity *",
             [c.value for c in Complexity],
-            help="Technical complexity level",
-            key="sa_complexity",
+            help="Technical complexity level"
         )
-    
+
     with col2:
         long_desc = st.text_area(
             "Long Description *",
             help="Detailed explanation of the change",
-            placeholder="Detailed description of why, what, and how...",
-            key="sa_long_desc",
+            placeholder="Detailed description of why, what, and how..."
         )
-        
+
         planned_window = st.text_input(
             "Planned Window (ISO datetime) *",
             help="Format: 2024-02-20T22:00:00Z",
-            placeholder="2024-02-20T22:00:00Z",
-            key="sa_planned_window",
+            placeholder="2024-02-20T22:00:00Z"
         )
-        
+
         impacted_services = st.text_area(
             "Impacted Services *",
             help="Comma-separated list of affected services",
             height=80,
-            placeholder="API Gateway, Authentication Service, Database",
-            key="sa_impacted_services",
+            placeholder="API Gateway, Authentication Service, Database"
         )
-    
+
     st.markdown("### Implementation & Validation")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         impl_steps = st.text_area(
             "Implementation Steps *",
             help="Step-by-step instructions",
             height=150,
-            placeholder="1. SSH to server\n2. Update config file\n3. Restart service",
-            key="sa_impl_steps",
+            placeholder="1. SSH to server\n2. Update config file\n3. Restart service"
         )
-        
+
         rollback_plan = st.text_area(
             "Rollback Plan *",
             help="How to revert if issues occur",
             height=150,
-            placeholder="1. Restore previous config\n2. Restart service",
-            key="sa_rollback_plan",
+            placeholder="1. Restore previous config\n2. Restart service"
         )
-    
+
     with col2:
         validation_steps = st.text_area(
             "Validation Steps *",
             help="How to verify the change worked",
             height=150,
-            placeholder="1. Test endpoint works\n2. Monitor error rate\n3. Verify latency",
-            key="sa_validation_steps",
+            placeholder="1. Test endpoint works\n2. Monitor error rate\n3. Verify latency"
         )
-    
+
     # Submit button
     submit = st.form_submit_button(
         "🔍 Analyze Change Request",
@@ -440,9 +414,9 @@ if submit:
         "impacted_services": impacted_services,
         "complexity": complexity,
     }
-    
+
     is_valid, change_request, errors = validate_change_request(form_data)
-    
+
     if not is_valid:
         st.error("❌ Validation errors:")
         for error in errors:
@@ -460,11 +434,11 @@ if submit:
             except Exception as e:
                 st.error(f"Failed to initialize engines: {e}")
                 st.stop()
-        
+
         # Run analysis
         with st.spinner("🔄 Analyzing change request..."):
             progress_placeholder = st.empty()
-            
+
             try:
                 # Initialize orchestrator
                 orchestrator = AnalysisOrchestrator(
@@ -473,12 +447,12 @@ if submit:
                     st.session_state.risk_scorer,
                     st.session_state.decision_engine,
                 )
-                
+
                 # Run analysis
                 progress_placeholder.info("📊 Running LLM analysis...")
                 llm_assessment, compliance_result, risk_scoring, final_decision, reasoning = orchestrator.analyze_change(change_request)
                 progress_placeholder.empty()
-                
+
                 # Persist results in session state so they survive reruns
                 st.session_state.llm_assessment = llm_assessment
                 st.session_state.compliance_result = compliance_result

@@ -161,7 +161,7 @@ def generate_sample_data():
         # Problematic changes (should require review or reject)
         {
             "Short Description": "Update production configuration file",
-            "Long description": "Some configuration updates needed in production",
+            "Long Description": "Some configuration updates needed in production",
             "Change Type": "standard",
             "Change Category": "configuration",
             "Implementation Steps": "Update config files",

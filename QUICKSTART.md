@@ -41,7 +41,7 @@ pip install -r requirements.txt
 ## Step 4: Generate Sample Data (optional, <1 minute)
 
 ```powershell
-python sample_data/generate_samples.py
+uv run python sample_data/generate_samples.py
 ```
 
 This creates test data: `sample_data/sample_changes.xlsx`
@@ -49,7 +49,7 @@ This creates test data: `sample_data/sample_changes.xlsx`
 ## Step 5: Run The Application (1 minute)
 
 ```powershell
-streamlit run app.py
+uv run streamlit run app.py
 ```
 
 The app opens at: http://localhost:8501
@@ -67,7 +67,7 @@ The app opens at: http://localhost:8501
 2. Click "Upload Excel file"
 3. Select `sample_data/sample_changes.xlsx`
 4. Click "Start Analysis"
-5. Watch 25 changes process automatically!
+5. Watch 24 changes process automatically!
 
 ## 📈 View Results
 
@@ -142,7 +142,7 @@ streamlit run app.py --server.port 8502
 The system is now running and ready to analyze production changes!
 
 ### Time to First Analysis: ~5 minutes
-### Time to Bulk Analyze 25 Changes: ~2-3 minutes
+### Time to Bulk Analyze 24 Changes: ~2-3 minutes
 ### Decision Quality: Professional grade with reasoning
 
 ---
