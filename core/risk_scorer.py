@@ -66,9 +66,9 @@ class RiskScorer:
         )
 
         # Determine risk level
-        if final_risk_score < 25:
+        if final_risk_score < 40:
             risk_level = RiskLevel.LOW
-        elif final_risk_score > 75:
+        elif final_risk_score > 70:
             risk_level = RiskLevel.HIGH
         else:
             risk_level = RiskLevel.MEDIUM
