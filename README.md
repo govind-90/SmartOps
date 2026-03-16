@@ -198,7 +198,7 @@ The application will start at `http://localhost:8501`
 ## 🔧 Configuration
 
 ### Thresholds
-
+   
 Adjust in `.env`:
 ```
 RISK_APPROVE_THRESHOLD=25       # Risk score <25 → auto-approve

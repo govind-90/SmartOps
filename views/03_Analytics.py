@@ -197,5 +197,5 @@ st.markdown("""
 - **Approval Rate**: Percentage of changes with APPROVE decision
 - **Risk Score**: Combined score from LLM analysis and rule-based calculation
 - **Confidence**: LLM assessment confidence level
-- **Risk Distribution**: Changes categorized as LOW (<25), MEDIUM (25-75), HIGH (>75)
+- **Risk Distribution**: Changes categorized as LOW (<40), MEDIUM (40-70), HIGH (>70)
 """)

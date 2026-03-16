@@ -42,8 +42,8 @@ class Settings:
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "2000"))
 
     # Risk scoring thresholds
-    RISK_APPROVE_THRESHOLD: int = int(os.getenv("RISK_APPROVE_THRESHOLD", "25"))
-    RISK_REJECT_THRESHOLD: int = int(os.getenv("RISK_REJECT_THRESHOLD", "75"))
+    RISK_APPROVE_THRESHOLD: int = int(os.getenv("RISK_APPROVE_THRESHOLD", "40"))
+    RISK_REJECT_THRESHOLD: int = int(os.getenv("RISK_REJECT_THRESHOLD", "70"))
 
     # RAG configuration
     EMBEDDINGS_MODEL: str = os.getenv("EMBEDDINGS_MODEL", "all-MiniLM-L6-v2")

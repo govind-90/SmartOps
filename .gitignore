@@ -7,9 +7,13 @@ ENV/
 
 # Database
 data/
+!data/
+data/*
+!data/database.py
+!data/repository.py
 *.db
-__pycache__/
 *.sqlite3
+
 
 # ChromaDB
 chroma_db/
@@ -42,3 +46,9 @@ build/
 # Excel/temp files
 *.xlsx~
 *.tmp
+
+# Claude
+.claude/
+
+#sbom
+sbom/
